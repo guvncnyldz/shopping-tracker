@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "bcryptjs-react": "^2.4.6",
     "cra-template": "1.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.5",
     "react-scripts": "^5.0.1"
   },
   "scripts": {
@@ -33,6 +36,7 @@
     ]
   },
   "devDependencies": {
+    "tailwindcss": "^3.4.17",
     "web-vitals": "^4.2.4"
   }
 }

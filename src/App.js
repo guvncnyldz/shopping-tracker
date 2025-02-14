@@ -1,11 +1,22 @@
-import logo from './logo.svg';
-import './App.css';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import LoginPage from './routes/unprotected/Login';
+import MainPage from './routes/MainPage'
 
+import ProtectedRoute from './routes/ProtectedRoute';
 function App() {
-  return (
-    <div className="App">
-      Test
-    </div>
+  return (<>
+    <BrowserRouter>
+      <div className='h-screen w-screen bg-gray-100'>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/" element={<MainPage />} />
+          </Route>
+        </Routes>
+      </div>
+
+    </BrowserRouter>
+  </>
   );
 }
 
