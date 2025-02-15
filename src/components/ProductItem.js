@@ -1,20 +1,23 @@
 import { useState, useEffect } from 'react';
 import { UnitEnum } from '../enums/UnityType';
 import { Loading } from './Loading';
-import { deleteProduct, addProductVariation, updateProductRequired } from '../db/db';
+import { deleteProduct, addProductVariation, updateProductRequired, updateVariationFavorite } from '../db/db';
 import ProductVariation from './ProductVariation';
+import { customParseFloat } from '../utilites/float';
 
 export default function ProductItem({ productId, product, onProductRemoved }) {
     const [expanded, setExpanded] = useState(null);
     const [hasVariations, setHasVariations] = useState(false);
     const [cheapest, setCheapest] = useState({});
     const [newLocation, setNewLocation] = useState();
+    const [newAmount, setNewAmount] = useState();
     const [newPrice, setNewPrice] = useState();
     const [newBrand, setNewBrand] = useState();
     const [isDeleting, setDeleting] = useState(false)
-    const [variations, setVariations] = useState([])
+    const [variations, setVariations] = useState(product.variations)
     const [isLocationEmpty, setLocationEmpty] = useState(false)
     const [isPriceEmpty, setPriceEmpty] = useState(false)
+    const [isAmountEmpty, setAmountEmpty] = useState(false)
     const [isAddingVariation, setAddingVariation] = useState(false)
     const [isRequired, setIsRequired] = useState(product.is_required);
     const [isRequiredLoading, setIsRequiredLoading] = useState(false)
@@ -35,6 +38,7 @@ export default function ProductItem({ productId, product, onProductRemoved }) {
     const handleAddVariation = async (e) => {
         e.stopPropagation()
         setLocationEmpty(false)
+        setAmountEmpty(false)
         setPriceEmpty(false)
 
         if (!newLocation)
@@ -43,10 +47,12 @@ export default function ProductItem({ productId, product, onProductRemoved }) {
         if (!newPrice)
             setPriceEmpty(true)
 
-        if (newLocation && newPrice) {
-            setAddingVariation(true)
-            let newVariation = { brand: newBrand, location: newLocation, price: parseFloat(newPrice).toFixed(2) };
+        if (!newAmount || newAmount <= 0)
+            setAmountEmpty(true)
 
+        if (newLocation && newPrice && newAmount && newAmount > 0) {
+            setAddingVariation(true)
+            let newVariation = { brand: newBrand, location: newLocation, amount: newAmount, price: customParseFloat(newPrice) };
             const result = await addProductVariation(product.product_id, newVariation)
             setAddingVariation(false)
 
@@ -54,23 +60,30 @@ export default function ProductItem({ productId, product, onProductRemoved }) {
                 return
             }
 
+            newVariation.id = result.id
             setVariations([...variations, newVariation]);
+            calculateCheapest()
         }
     };
 
     useEffect(() => {
-        setVariations(product.variations)
-
-    }, [product]);
-
-    useEffect(() => {
-        setHasVariations(product.variations.length !== 0);
-        if (hasVariations) {
-            setCheapest(product.variations.reduce((prev, curr) => (curr.price < prev.price ? curr : prev)));
-        }
+        calculateCheapest()
+        product.variations = variations
     }, [variations])
 
-    const sortedVariations = variations.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+    function calculateCheapest() {
+        setHasVariations(variations.length !== 0);
+        if (variations.length !== 0) {
+            const favoriteVariations = variations.filter(v => v.is_favorite);
+
+            const availableVariations = favoriteVariations.length > 0 ? favoriteVariations : variations;
+
+            setCheapest(availableVariations.reduce((prev, curr) =>
+                (parseFloat(curr.price) / parseFloat(curr.amount) < parseFloat(prev.price) / parseFloat(prev.amount) ? curr : prev)
+            ))
+        }
+    }
+    const sortedVariations = variations.sort((a, b) => (parseFloat(a.price) / parseFloat(a.amount)) - (parseFloat(b.price) / parseFloat(b.amount)));
 
     const handleRemoveProduct = async (e, productId) => {
         e.stopPropagation();
@@ -89,6 +102,23 @@ export default function ProductItem({ productId, product, onProductRemoved }) {
         setVariations(variations.filter(variation => variation.id !== variationId))
     };
 
+    const handleFavorite = (variationId) => {
+        const isFavorite = variations.find(variation => variation.id === variationId).is_favorite
+
+        updateVariationFavorite(variationId, !isFavorite)
+        setVariations(prevVariations =>
+            prevVariations.map(variation =>
+                variation.id === variationId
+                    ? { ...variation, is_favorite: !isFavorite }
+                    : variation
+            )
+        );
+    }
+
+    const amountUnit = UnitEnum.find(unit => unit.id == product.amount_unit)
+    const totalPrice = `${customParseFloat(cheapest.price)}₺/${cheapest.amount}${amountUnit.totalText}`
+    const unitPrice = `${customParseFloat(parseFloat(cheapest.price) / parseFloat(cheapest.amount))}₺/${amountUnit.unitText}`
+
     return (
         <div
             key={productId}
@@ -104,12 +134,12 @@ export default function ProductItem({ productId, product, onProductRemoved }) {
                     }} className={`cursor-pointer flex items-center justify-center w-6 h-6 rounded-full border border-gray-800 ${isRequired ? "bg-green-400" : "bg-white"}`}>
                         {isRequiredLoading ? <Loading width={6} height={6} /> : <></>}
                     </label>
-                    <span>{product.name} - {product.amount} {UnitEnum.find((unit) => unit.id === product.amount_unit).text}</span>
+                    <span>{product.name}</span>
                 </div>
                 <div className="flex flex-row items-center space-x-2">
                     {hasVariations && (
                         <span className="text-sm text-gray-500">
-                            {cheapest.brand ? cheapest.brand + " -" : ""} {cheapest.location} - {parseFloat(cheapest.price).toFixed(2)}₺
+                            {cheapest.brand ? cheapest.brand + " | " : ""} {cheapest.location} | {totalPrice} 
                         </span>
                     )}
                     <button
@@ -124,11 +154,11 @@ export default function ProductItem({ productId, product, onProductRemoved }) {
             {expanded === productId && (
                 <div className="mt-2 p-2 bg-gray-100 rounded">
                     {sortedVariations.map((variation) => (
-                        <ProductVariation onRemoved={onVariationRemoved} variation={variation} />
+                        <ProductVariation onRemoved={onVariationRemoved} onFavoriteChanged={handleFavorite} product={product} variation={variation} />
                     ))}
                     <div className="flex space-x-2 mt-2">
                         <input
-                            className="border p-1 rounded w-1/3"
+                            className="border p-1 rounded w-1/4"
                             placeholder="Marka"
                             value={newBrand}
                             onChange={e => setNewBrand(e.target.value)}
@@ -137,7 +167,7 @@ export default function ProductItem({ productId, product, onProductRemoved }) {
                             }}
                         />
                         <input
-                            className={`border p-1 rounded w-1/3 ${isLocationEmpty ? "border-red-600" : ""}`}
+                            className={`border p-1 rounded w-1/4 ${isLocationEmpty ? "border-red-600" : ""}`}
                             placeholder="Mekan"
                             value={newLocation}
                             onChange={e => setNewLocation(e.target.value)}
@@ -146,7 +176,17 @@ export default function ProductItem({ productId, product, onProductRemoved }) {
                             }}
                         />
                         <input
-                            className={`border p-1 rounded w-1/3 ${isPriceEmpty ? "border-red-600" : ""}`}
+                            className={`border p-1 rounded w-1/4 ${isLocationEmpty ? "border-red-600" : ""}`}
+                            placeholder="Miktar"
+                            type="number"
+                            value={newAmount}
+                            onChange={e => setNewAmount(e.target.value)}
+                            onClick={e => {
+                                e.stopPropagation()
+                            }}
+                        />
+                        <input
+                            className={`border p-1 rounded w-1/4 ${isPriceEmpty ? "border-red-600" : ""}`}
                             placeholder="Fiyat"
                             type="number"
                             value={newPrice}

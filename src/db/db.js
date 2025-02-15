@@ -35,7 +35,6 @@ export async function getProducts() {
             SELECT 
                 p.id AS product_id, 
                 p.name, 
-                p.amount, 
                 p.amount_unit,
                 p.is_required,
                 COALESCE(
@@ -44,7 +43,9 @@ export async function getProducts() {
                             'id', pv.id,
                             'brand', pv.brand,
                             'location', pv.location,
-                            'price', pv.price
+                            'amount',pv.amount,
+                            'price', pv.price,
+                            'is_favorite', pv.is_favorite
                              )
                          ) FILTER (WHERE pv.id IS NOT NULL), '[]'
                     ) AS variations
@@ -65,7 +66,7 @@ export async function getProducts() {
 export async function deleteProduct(productId) {
     try {
         const user = getAuth();
-        
+
         if (!user)
             return false;
 
@@ -98,6 +99,31 @@ export async function deleteProductVariation(variationId) {
     }
 }
 
+export async function updateVariationFavorite(variationId, isFavorite) {
+    try {
+        const user = getAuth();
+
+        if (!user) {
+            return false;
+        }
+
+        const result = await sql`
+            UPDATE product_variations
+            SET is_favorite = ${isFavorite}
+            WHERE id = ${variationId}
+            RETURNING id
+        `;
+
+        if (result.length > 0) {
+            return true;
+        }
+
+        return false;
+    } catch (error) {
+        console.error('Error updating product is_required:', error);
+        return false;
+    }
+}
 export async function addProduct(product, variations) {
     try {
         const user = getAuth()
@@ -108,8 +134,8 @@ export async function addProduct(product, variations) {
         await sql`BEGIN`;
 
         const result = await sql`
-            INSERT INTO products (name, amount, amount_unit, home_id)
-            VALUES (${product.name}, ${product.amount}, ${product.unit}, ${user.home_id})
+            INSERT INTO products (name,  amount_unit, home_id)
+            VALUES (${product.name},  ${product.unit}, ${user.home_id})
             RETURNING id
         `;
 
@@ -117,8 +143,8 @@ export async function addProduct(product, variations) {
 
         for (const variation of variations) {
             await sql`
-                INSERT INTO product_variations (product_id, brand, location, price)
-                VALUES (${productId}, ${variation.brand}, ${variation.location}, ${variation.price})
+                INSERT INTO product_variations (product_id, brand, amount, location, price)
+                VALUES (${productId}, ${variation.brand}, ${variation.amount}, ${variation.location}, ${variation.price})
             `;
         }
 
@@ -163,16 +189,17 @@ export async function addProductVariation(productId, variation) {
         const user = getAuth();
 
         if (!user)
-            return false;
+            return null;
 
-        await sql`
-            INSERT INTO product_variations (product_id, brand, location, price)
-            VALUES (${productId}, ${variation.brand}, ${variation.location}, ${variation.price})
+        const data = await sql`
+            INSERT INTO product_variations (product_id, brand, amount, location, price)
+            VALUES (${productId}, ${variation.brand}, ${variation.amount}, ${variation.location}, ${variation.price})
+            RETURNING id
         `;
 
-        return true;
+        return data[0];
     } catch (error) {
         console.error('Error adding product variation:', error);
-        return false;
+        return null;
     }
 }

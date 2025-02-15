@@ -6,7 +6,7 @@ import ProtectedRoute from './routes/ProtectedRoute';
 function App() {
   return (<>
     <BrowserRouter>
-      <div className='h-full w-screen bg-gray-100'>
+      <div className='min-h-screen w-auto bg-gray-100'>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute />}>
