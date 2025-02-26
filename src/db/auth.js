@@ -1,5 +1,5 @@
 const STORAGE_KEY = "auth_user";
-const EXPIRE_TIME = 3 * 24 * 60 * 3 * 1000;
+const EXPIRE_TIME = 7 * 24 * 60 * 60 * 1000;
 
 export function setAuth(user) {
     const data = {
